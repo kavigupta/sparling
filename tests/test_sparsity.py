@@ -226,11 +226,14 @@ class EnforceSparsityPerChannelAccumulatedTest(unittest.TestCase):
         out = s(torch.randn(10000, CHANNELS))
         self._check_per_channel(out, 0.95)
 
-    # def test_sparsity_999(self):
-    #     s = self._calibrate(0.999, num_batches=NUM_BATCHES * 100)
-    #     expected_thresh = torch.distributions.Normal(0, 1).icdf(torch.tensor(0.999)).item()
-    #     for thresh in s.thresholds.data:
-    #         self.assertAlmostEqual(thresh.item(), expected_thresh, delta=0.1)
+    def test_sparsity_999(self):
+        s = self._calibrate(0.999, num_batches=NUM_BATCHES * 100)
+        expected_thresh = torch.distributions.Normal(0, 1).icdf(torch.tensor(0.999)).item()
+        for thresh in s.thresholds.data:
+            self.assertAlmostEqual(thresh.item(), expected_thresh, delta=0.3)
+        overall_sparsity = (s(torch.randn(10000, CHANNELS)) == 0).float().mean().item()
+        self.assertGreater(overall_sparsity, 0.9985)
+        self.assertLess(overall_sparsity, 0.9995)
 
     def test_heterogeneous_per_channel_sparsity(self):
         s, means = self._calibrate_heterogeneous(0.5)
