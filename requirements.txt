@@ -1,0 +1,8 @@
+# installation
+setuptools
+
+# testing
+pytest
+pylint
+black
+isort
