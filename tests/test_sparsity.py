@@ -4,7 +4,6 @@ import torch
 
 from sparling.sparsity import (
     ChangingSparsityForL1,
-    EnforceSparsity1D,
     EnforceSparsityPerChannel,
     EnforceSparsityPerChannel1D,
     EnforceSparsityPerChannel2D,
@@ -467,32 +466,6 @@ class SparseLayerWithBatchNormTest(unittest.TestCase):
         )
         s.sparsity = 0.9
         self.assertEqual(s.underlying_enforcer.sparsity, 0.9)
-
-
-class EnforceSparsity1DTest(unittest.TestCase):
-    def test_calibrated_sparsity(self):
-        torch.manual_seed(0)
-        s = EnforceSparsity1D(
-            underlying_sparsity_spec=dict(type="EnforceSparsityPerChannel2D"),
-            starting_sparsity=0.7,
-            channels=CHANNELS,
-        )
-        s.train()
-        for _ in range(NUM_BATCHES):
-            s(torch.randn(16, CHANNELS, 64))
-        s.eval()
-        torch.manual_seed(99)
-        out = s(torch.randn(64, CHANNELS, 64))
-        self.assertAlmostEqual(_empirical_sparsity(out), 0.7, delta=TOLERANCE)
-
-    def test_sparsity_propagates(self):
-        s = EnforceSparsity1D(
-            underlying_sparsity_spec=dict(type="NoSparsity"),
-            starting_sparsity=0.5,
-            channels=CHANNELS,
-        )
-        s.sparsity = 0.8
-        self.assertEqual(s.underlying_enforcer.sparsity, 0.8)
 
 
 class ParallelSparsityLayersTest(unittest.TestCase):

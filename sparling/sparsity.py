@@ -312,33 +312,6 @@ class SparseLayerWithBatchNorm(Sparsity):
             x = x.transpose(1, 2)
         return x
 
-
-class EnforceSparsity1D(Sparsity):
-    def __init__(self, underlying_sparsity_spec, starting_sparsity, channels):
-        super().__init__(starting_sparsity, channels)
-        self.underlying_enforcer = construct(
-            sparsity_types(),
-            underlying_sparsity_spec,
-            starting_sparsity=starting_sparsity,
-            channels=channels,
-        )
-
-    def notify_sparsity(self):
-        super().notify_sparsity()
-        self.underlying_enforcer.sparsity = self.sparsity
-
-    def forward(self, x, disable_relu=False):
-        # N, C, L
-        assert len(x.shape) == 3
-        x = x[:, :, None]
-        # x : (N, C, 1, L)
-        x = self.underlying_enforcer(x, disable_relu=disable_relu)
-        # x : (N, C, 1, L)
-        assert x.shape[2] == 1
-        x = x[:, :, 0]
-        return x
-
-
 class ParallelSparsityLayers(Sparsity):
     def __init__(self, sparse_model_specs, channels_each, starting_sparsity, channels):
         super().__init__(starting_sparsity=starting_sparsity, channels=channels)
@@ -385,6 +358,5 @@ def sparsity_types():
         EnforceSparsityUniversally=EnforceSparsityUniversally,
         NoiseRatherThanSparsity=NoiseRatherThanSparsity,
         SparseLayerWithBatchNorm=SparseLayerWithBatchNorm,
-        EnforceSparsity1D=EnforceSparsity1D,
         ParallelSparsityLayers=ParallelSparsityLayers,
     )

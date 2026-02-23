@@ -1,6 +1,5 @@
 from sparling.sparsity import (
     ChangingSparsityForL1,
-    EnforceSparsity1D,
     EnforceSparsityPerChannel,
     EnforceSparsityPerChannel1D,
     EnforceSparsityPerChannel2D,
