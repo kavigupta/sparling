@@ -4,8 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sparling"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sparsity enforcement and adaptive sparsity update utilities for neural networks"
+readme = "README.md"
+authors = [{name = "Kavi Gupta", email = "sparling@kavigupta.org"}]
 requires-python = ">=3.9"
 dependencies = [
     "torch",
