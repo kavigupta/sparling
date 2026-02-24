@@ -33,6 +33,7 @@ class LinearThresholdAdaptiveSUO(SparsityUpdateOptimizer):
     def __init__(
         self,
         optimizer,
+        *,
         initial_threshold,
         minimal_threshold,
         maximal_threshold,

@@ -282,6 +282,7 @@ class SparseLayerWithBatchNorm(Sparsity):
     def __init__(
         self,
         underlying_sparsity_spec,
+        *,
         starting_sparsity,
         channels,
         affine,
