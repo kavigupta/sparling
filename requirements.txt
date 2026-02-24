@@ -3,6 +3,6 @@ setuptools
 
 # testing
 pytest
-pylint
-black
-isort
+pylint==2.17.7
+black==23.3.0
+isort==5.9.3

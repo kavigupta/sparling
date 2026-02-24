@@ -312,6 +312,7 @@ class SparseLayerWithBatchNorm(Sparsity):
             x = x.transpose(1, 2)
         return x
 
+
 class ParallelSparsityLayers(Sparsity):
     def __init__(self, sparse_model_specs, channels_each, starting_sparsity, channels):
         super().__init__(starting_sparsity=starting_sparsity, channels=channels)
