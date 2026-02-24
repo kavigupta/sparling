@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from sparling.sparsity import (
+from sparling import (
     ChangingSparsityForL1,
     EnforceSparsityPerChannel,
     EnforceSparsityPerChannel1D,

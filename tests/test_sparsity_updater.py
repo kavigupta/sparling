@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from sparling.sparsity_update import LinearThresholdAdaptiveSUO, NoopSUO
+from sparling import LinearThresholdAdaptiveSUO, NoopSUO
 
 
 class FakeModel:
