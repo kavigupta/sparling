@@ -7,20 +7,39 @@ from torch import nn
 
 
 class Sparsity(ABC, nn.Module):
+    """Abstract base class for all sparsity layers.
+
+    All sparsity layers are ``nn.Module`` subclasses whose target sparsity can be
+    updated at any time via the :attr:`sparsity` property.  Subclasses may override
+    :meth:`notify_sparsity` to react to changes.
+
+    :param starting_sparsity: initial fraction of values to zero out (0-1).
+    :param channels: number of channels the layer operates on.
+    """
+
     def __init__(self, starting_sparsity, channels):
         super().__init__()
         self._sparsity = starting_sparsity
         self.channels = channels
 
     def notify_sparsity(self):
-        pass
+        """Called whenever :attr:`sparsity` is updated.
+
+        Subclasses should override this to propagate sparsity changes to internal
+        components (e.g. underlying enforcers).  The default implementation does nothing.
+        """
 
     @property
     def sparsity(self):
+        """The current target sparsity (fraction of values to zero out, 0-1).
+
+        Setting this property updates the internal state and calls :meth:`notify_sparsity`.
+        """
         return self._sparsity
 
     @property
     def density(self):
+        """The current density, equal to ``1 - sparsity``."""
         return 1 - self.sparsity
 
     @sparsity.setter
@@ -30,11 +49,15 @@ class Sparsity(ABC, nn.Module):
 
 
 class NoSparsity(Sparsity):
+    """Identity pass-through — applies no sparsity."""
+
     def forward(self, x, disable_relu=False):  # pylint: disable=unused-argument
         return x
 
 
 class SparsityForL1(Sparsity):
+    """Applies ReLU activation, intended for use with an external L1 loss to control sparsity."""
+
     def forward(self, x, disable_relu=False):
         if disable_relu:
             return x
@@ -42,6 +65,12 @@ class SparsityForL1(Sparsity):
 
 
 class ChangingSparsityForL1(Sparsity):
+    """ReLU with density-scaled motif loss.
+
+    Returns a dict with ``result`` (the ReLU output) and ``motifs_for_loss``
+    (the output scaled by ``1 / (1 - sparsity)``).
+    """
+
     def forward(self, x, disable_relu=False):
         assert not disable_relu
         x = torch.nn.functional.relu(x)
@@ -53,6 +82,8 @@ class ChangingSparsityForL1(Sparsity):
 
 
 class SparsityForKL(Sparsity):
+    """Applies sigmoid activation, intended for use with an external KL loss to control sparsity."""
+
     def forward(self, x, disable_relu=False):
         assert not disable_relu
         return torch.sigmoid(x)
@@ -64,11 +95,11 @@ class EnforceSparsityPerChannel(Sparsity):
 
     Takes an input of size (N, C) and enforces sparsities for each channel C independently.
 
-    Arguments
-        sparsity: inital sparsity to enforce
-        num_channels: the number of channels C to enforce sparsity on
-        momentum: the momentum of the collected percentile statistic. The default value of 0.1 indicates that
-            at each batch update we use 90% existing thresholds and 10% the percentile statistic thresholds.
+    :param starting_sparsity: initial sparsity to enforce
+    :param channels: the number of channels C to enforce sparsity on
+    :param momentum: the momentum of the collected percentile statistic. The default value of 0.1
+        indicates that at each batch update we use 90% existing thresholds and 10% the percentile
+        statistic thresholds.
     """
 
     def __init__(
@@ -127,6 +158,11 @@ class EnforceSparsityPerChannelAccumulated(EnforceSparsityPerChannel):
 
 
 class StopAtFixedNumberElements:
+    """Stop accumulating when the total number of elements reaches a fixed threshold.
+
+    :param num_elements: number of elements to accumulate before triggering a threshold update.
+    """
+
     def __init__(self, num_elements):
         self.num_elements = num_elements
 
@@ -135,6 +171,11 @@ class StopAtFixedNumberElements:
 
 
 class StopAtFixedNumberMotifs:
+    """Stop accumulating when the estimated number of elements, multiplied by the current density, reaches a fixed threshold.
+
+    :param num_motifs: target number of motifs (nonzero values) to accumulate before triggering a threshold update.
+    """
+
     def __init__(self, num_motifs):
         self.num_motifs = num_motifs
 
@@ -157,8 +198,16 @@ def enforce_sparsity_per_channel_types():
 
 
 class EnforceSparsityPerChannel2D(Sparsity):
-    """
-    Like EnforceSparsityPerChannel, but handling 2d inputs.
+    """Like :class:`EnforceSparsityPerChannel`, but for 4-D inputs of shape ``(N, C, H, W)``.
+
+    Reshapes the spatial dimensions into the batch dimension, delegates to an underlying
+    :class:`EnforceSparsityPerChannel`, then reshapes back.
+
+    :param starting_sparsity: initial sparsity to enforce.
+    :param channels: number of channels C.
+    :param momentum: momentum for threshold updates.
+    :param enforce_sparsity_per_channel_spec: optional ``dconstruct`` spec for the underlying
+        enforcer.  Defaults to ``EnforceSparsityPerChannel``.
     """
 
     def __init__(
@@ -182,6 +231,7 @@ class EnforceSparsityPerChannel2D(Sparsity):
         )
 
     def notify_sparsity(self):
+        """Override."""  # noqa: D401
         super().notify_sparsity()
         self.underlying_enforcer.sparsity = self.sparsity
 
@@ -205,6 +255,8 @@ class EnforceSparsityPerChannel2D(Sparsity):
 
 
 class EnforceSparsityPerChannel1D(EnforceSparsityPerChannel2D):
+    """Like :class:`EnforceSparsityPerChannel2D`, but for 3-D inputs of shape ``(N, C, L)``."""
+
     def forward(self, x, **kwargs):
         x = x.unsqueeze(2)
         x = super().forward(x, **kwargs)
@@ -213,9 +265,11 @@ class EnforceSparsityPerChannel1D(EnforceSparsityPerChannel2D):
 
 
 class EnforceSparsityUniversally(Sparsity):
-    """
-    Like EnforceSparsityPerChannel but without reference to channels,
-        setting a single threshold across the channels
+    """Like :class:`EnforceSparsityPerChannel` but with a single global threshold across all channels.
+
+    :param starting_sparsity: initial sparsity to enforce.
+    :param channels: ignored (kept for interface compatibility).
+    :param momentum: momentum for threshold updates.
     """
 
     def __init__(self, starting_sparsity, channels=None, momentum=0.1):
@@ -225,6 +279,7 @@ class EnforceSparsityUniversally(Sparsity):
         )
 
     def notify_sparsity(self):
+        """Override."""  # noqa: D401
         super().notify_sparsity()
         self.underlying_enforcer.sparsity = self.sparsity
 
@@ -237,19 +292,19 @@ class EnforceSparsityUniversally(Sparsity):
 
 
 class NoiseRatherThanSparsity(Sparsity):
-    """
-    Uses noise rather than sparsity to enforce an informational bottleneck.
+    """Uses noise rather than sparsity to enforce an informational bottleneck.
 
-    Relationship between noise and sparsity:
+    Relationship between noise and sparsity::
+
         information ~= channels * hbern(sparsity)
-        information ~= channels / 2 * log (1 + 1/sigma^2)
+        information ~= channels / 2 * log(1 + 1 / sigma^2)
 
         solving for sigma:
             sigma^2 = 1 / (exp(2 * information / channels) - 1)
 
-    This is of course a very rough approximation, and you should calibrate
-        the actual information values empirically. This is just to make
-        sure that you get roughly the right range of values.
+    This is a very rough approximation:  you should calibrate the actual
+    information values empirically.  This just ensures you get roughly the
+    right range of values.
     """
 
     def __init__(self, starting_sparsity, channels=None):
@@ -275,8 +330,17 @@ class NoiseRatherThanSparsity(Sparsity):
 
 
 class SparseLayerWithBatchNorm(Sparsity):
-    """
-    Wraps a sparsity enforcer, adding a batch norm layer before it.
+    """Wraps a sparsity enforcer with a preceding batch normalization layer.
+
+    This is the recommended way to use Sparling — the batch norm is necessary for the
+    sparsity enforcement algorithm to work well in practice.
+
+    :param underlying_sparsity_spec: ``dconstruct`` spec dict for the inner sparsity layer
+        (e.g. ``dict(type="EnforceSparsityPerChannel2D")``).
+    :param starting_sparsity: initial sparsity to enforce.
+    :param channels: number of channels.
+    :param affine: whether the batch norm has learnable affine parameters.
+    :param input_dimensions: ``2`` for ``(N, C, H, W)`` inputs, ``1`` for ``(N, C, L)``.
     """
 
     def __init__(
@@ -301,6 +365,7 @@ class SparseLayerWithBatchNorm(Sparsity):
         )
 
     def notify_sparsity(self):
+        """Override."""  # noqa: D401
         super().notify_sparsity()
         self.underlying_enforcer.sparsity = self.sparsity
 
@@ -315,6 +380,14 @@ class SparseLayerWithBatchNorm(Sparsity):
 
 
 class ParallelSparsityLayers(Sparsity):
+    """Applies different sparsity layers to disjoint channel subsets in parallel.
+
+    :param sparse_model_specs: list of ``dconstruct`` spec dicts, one per subset.
+    :param channels_each: list of channel counts for each subset (must sum to *channels*).
+    :param starting_sparsity: initial sparsity to enforce.
+    :param channels: total number of channels.
+    """
+
     def __init__(self, sparse_model_specs, channels_each, starting_sparsity, channels):
         super().__init__(starting_sparsity=starting_sparsity, channels=channels)
         assert len(sparse_model_specs) == len(channels_each)
@@ -333,6 +406,7 @@ class ParallelSparsityLayers(Sparsity):
         )
 
     def notify_sparsity(self):
+        """Override."""  # noqa: D401
         super().notify_sparsity()
         for starting_sparsity in self.sparse_layers:
             starting_sparsity.sparsity = self.sparsity

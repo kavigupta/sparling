@@ -2,8 +2,13 @@ from abc import ABC, abstractmethod
 
 
 class SparsityUpdateOptimizer(ABC):
-    """
-    Not a torch optimizer object, but it does support the basic zero_grad/step interface.
+    """Abstract base class for sparsity update optimizers.
+
+    Wraps a standard ``torch`` optimizer and adds a :meth:`update_sparsity` hook
+    that adjusts a model's sparsity during training.  Not a ``torch`` optimizer
+    itself, but exposes the same ``zero_grad``/``step`` interface.
+
+    :param optimizer: the underlying ``torch`` optimizer to wrap.
     """
 
     def __init__(self, optimizer):
@@ -23,10 +28,10 @@ class SparsityUpdateOptimizer(ABC):
 
 
 class NoopSUO(SparsityUpdateOptimizer):
+    """A no-op sparsity update optimizer.  Useful as a baseline that never changes sparsity."""
+
     def update_sparsity(self, model, step, acc_info):
-        """
-        Does nothing
-        """
+        pass
 
 
 class LinearThresholdAdaptiveSUO(SparsityUpdateOptimizer):
@@ -42,19 +47,21 @@ class LinearThresholdAdaptiveSUO(SparsityUpdateOptimizer):
         information_multiplier,
         initial_step=0,
     ):
-        """
-        The Linear Threshold Adaptive SUO uses an algorithm where a current accuracy threshold
-            is mantained, and slowly decreased over time. If the model exceeds the threshold,
-            the threshold is increased to match the model and the model's information is reduced
-            (information + sparsity = 1).
+        """Accuracy-threshold-driven adaptive sparsity update optimizer.
 
-        Arguments:
-            optimizer: the underlying optimizer
-            initial_threshold: the initial accuracy threshold [0-1]
-            minimal_threshold: the minimal accuracy threshold to use [0-1]
-            threshold_decrease_per_iter: the amount you decrease the threshold every iteration
-            minimal_update_frequency: the minimal number of iterations between updates
-            information_multiplier: how much to change the amount of information (1 - sparsity)
+        Maintains a current accuracy threshold that slowly decreases over time.  When the
+        model exceeds the threshold, the threshold is raised to match and the model's
+        information (``1 - sparsity``) is reduced by ``information_multiplier``.
+
+        :param optimizer: the underlying ``torch`` optimizer.
+        :param initial_threshold: the initial accuracy threshold (0-1).
+        :param minimal_threshold: the lower bound for the accuracy threshold (0-1).
+        :param maximal_threshold: the upper bound for the accuracy threshold (0-1).
+        :param threshold_decrease_per_iter: amount the threshold decreases per iteration.
+        :param minimal_update_frequency: minimum number of iterations between sparsity updates.
+        :param information_multiplier: multiplicative factor applied to information
+            (``1 - sparsity``) when the model exceeds the threshold.
+        :param initial_step: starting step counter (default 0).
         """
         super().__init__(optimizer)
         self._threshold = initial_threshold
